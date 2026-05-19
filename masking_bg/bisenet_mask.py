@@ -7,6 +7,7 @@ Config-based mask selection - choose which parts to include.
 import os
 import sys
 import importlib.util
+import urllib.request
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +58,38 @@ DEFAULT_INCLUDE = {
     'hat': False,
 }
 
+BISENET_WEIGHT_URLS = {
+    "resnet18": "https://github.com/yakhyo/face-parsing/releases/download/weights/resnet18.pt",
+    "resnet34": "https://github.com/yakhyo/face-parsing/releases/download/weights/resnet34.pt",
+}
+
+
+def ensure_bisenet_weight(model_name: str) -> Path:
+    """Return the local BiSeNet weight path, downloading it if needed."""
+    weight_path = MASKING_PATH / "weights" / f"{model_name}.pt"
+    if weight_path.exists():
+        return weight_path
+
+    url = BISENET_WEIGHT_URLS.get(model_name)
+    if not url:
+        available = ", ".join(sorted(BISENET_WEIGHT_URLS))
+        raise ValueError(f"Unsupported BiSeNet model '{model_name}'. Available: {available}")
+
+    weight_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = weight_path.with_suffix(".pt.download")
+    print(f"BiSeNet weight missing: {weight_path}")
+    print(f"Downloading {model_name} weights from {url}")
+
+    try:
+        urllib.request.urlretrieve(url, tmp_path)
+        tmp_path.replace(weight_path)
+    except Exception:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        raise
+
+    return weight_path
+
 
 class BiSeNetMaskGenerator:
     def __init__(
@@ -83,7 +116,7 @@ class BiSeNetMaskGenerator:
         )
 
     def _init(self):
-        weight_path = MASKING_PATH / "weights" / f"{self.model_name}.pt"
+        weight_path = ensure_bisenet_weight(self.model_name)
         self._model = BiSeNet(self.num_classes, backbone_name=self.model_name)
         self._model.to(self.device)
         self._model.load_state_dict(torch.load(weight_path, map_location=self.device))

@@ -14,6 +14,35 @@ A modular deep learning project for automatic shadow removal from face and neck 
 
 ## Quick Start
 
+### Step 0: Install Dependencies
+
+```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+# source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+Install PyTorch for your machine separately if needed:
+
+```bash
+# CUDA 12.4
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+
+# CPU only
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+```
+
+BiSeNet face parsing weights are downloaded automatically on first use if missing:
+
+- `Masking/weights/resnet18.pt`
+- `Masking/weights/resnet34.pt`
+
+The `Masking/weights/.gitkeep` file keeps the weights folder in GitHub, but the large `.pt` files are intentionally not committed.
+
 ### Step 1: Configure Dataset Path
 
 Edit `configs/config.yaml`:
@@ -114,6 +143,40 @@ Input Image → BiSeNet (from Masking) → Face parsing mask (19 classes)
                                              ↓
                         Output: PNG with transparent BG (no shadows, good texture)
 ```
+
+---
+
+## Required External Files
+
+The repository contains the code and BiSeNet architecture. Large generated files are not committed.
+
+For inference, you still need a trained Relighty checkpoint:
+
+```text
+checkpoints/shadow_removal_best.pth
+```
+
+If that file is missing, train first:
+
+```bash
+python -m training.train
+```
+
+or provide a checkpoint explicitly:
+
+```bash
+python -m evaluation.inference --input photo.jpg --output result.png --checkpoint path/to/model.pth
+```
+
+For training, you need your dataset outside Git:
+
+```text
+dataset/
+├── input/
+└── target/
+```
+
+BiSeNet weights do not need to be copied manually. If `Masking/weights/resnet34.pt` or `Masking/weights/resnet18.pt` is missing, Relighty downloads it from the public `yakhyo/face-parsing` release.
 
 ---
 

@@ -4,6 +4,8 @@
 - Python 3.12+
 - Install dependencies: `pip install -r requirements.txt`
 - PyTorch installed (see setup.bat or setup.sh)
+- BiSeNet weights download automatically to `Masking/weights/` on first use
+- For inference without training, copy your trained checkpoint to `checkpoints/shadow_removal_best.pth`
 
 ---
 
