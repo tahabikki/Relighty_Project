@@ -1,0 +1,27 @@
+# Relighty — Face Shadow Removal
+# Python 3.12+
+#
+# PyTorch is NOT listed here — install it via the setup script:
+#   Windows (CUDA 12.4) : setup.bat
+#   macOS / Linux       : bash setup.sh
+#
+# Manual PyTorch install:
+#   CUDA 12.4 : pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   macOS MPS : pip install torch torchvision
+#   CPU only  : pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# ── Face masking (MediaPipe Tasks API) ────────────────────────────────────────
+mediapipe==0.10.35
+
+# ── Image processing ─────────────────────────────────────────────────────────
+numpy>=1.24.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# ── Training utilities ────────────────────────────────────────────────────────
+tqdm>=4.66.0
+pyyaml>=6.0
+
+# ── Evaluation & visualisation ────────────────────────────────────────────────
+scikit-image>=0.21.0
+tensorboard>=2.14.0

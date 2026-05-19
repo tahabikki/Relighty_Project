@@ -1,0 +1,124 @@
+# =============================================================================
+# Relighty - Face Shadow Removal Configuration
+# =============================================================================
+# All paths are relative to PROJECT_ROOT unless absolute paths are provided.
+# To deploy in any environment, only modify this config file.
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+model:
+  name: unet_resnet34
+  input_size: 256
+  channels: 3
+
+# =============================================================================
+# BiSeNet Masking Configuration (Face Parsing)
+# =============================================================================
+masking:
+  # Model backbone: resnet18 or resnet34
+  model_name: resnet34
+
+  # Which parts to include in the mask (face, neck, mouth, etc.)
+  # Set to true to include, false to exclude
+  include:
+    skin: true       # visage/face
+    l_brow: true     # left eyebrow
+    r_brow: true     # right eyebrow
+    l_eye: true     # left eye
+    r_eye: true     # right eye
+    eye_glasses: false
+    l_ear: false     # left ear
+    r_ear: false     # right ear
+    earring: false
+    nose: true       # nose
+    mouth: true      # mouth
+    u_lip: true     # upper lip
+    l_lip: true     # lower lip
+    neck: true       # neck
+    neck_l: true     # neck label
+    cloth: false     # clothes - usually exclude for face shadow removal
+    hair: false      # hair - usually exclude
+    hat: false       # hat - usually exclude
+
+# =============================================================================
+# Training Configuration
+# =============================================================================
+training:
+  batch_size: 4
+  epochs: 200
+  lr: 0.00001
+  enc_lr: 0.000001
+  no_amp: true
+  optimizer: AdamW
+  weight_decay: 0.0001
+  save_every: 10
+  device: auto                    # auto, cuda, cpu, mps
+
+# =============================================================================
+# Early Stopping Configuration
+# =============================================================================
+early_stopping:
+  enabled: true
+  patience: 15
+  min_delta: 0.0001
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+logging:
+  log_dir: logs                   # relative to project root
+  save_frequency: 1
+
+# =============================================================================
+# DataLoader Configuration
+# =============================================================================
+dataloader:
+  num_workers: 0                  # set 0 on Windows if you have issues
+  pin_memory: true
+  persistent_workers: true
+
+# =============================================================================
+# Loss Configuration
+# =============================================================================
+loss:
+  l1_weight: 1.0
+  ssim_weight: 0.5
+
+# =============================================================================
+# Data Paths Configuration - EDIT THIS FOR YOUR ENVIRONMENT
+# =============================================================================
+data:
+  # Dataset root directory (where input/ and target/ folders are)
+  # Use absolute path or relative to project root
+  # After running mask_bg_remove, use dataset:
+  dataset_root: dataset
+
+  # Subdirectories within dataset_root
+  input_subdir: input             # images with shadows (PNG with transparent)
+  target_subdir: target           # target images (shadow-free, PNG with transparent)
+
+  # Where to save the train/val split files
+  splits_dir: dataset/splits
+
+  # Image processing
+  image_size: 256
+  train_ratio: 0.85
+  seed: 42
+
+# =============================================================================
+# Checkpoint Configuration
+# =============================================================================
+checkpoint:
+  dir: checkpoints               # where to save model checkpoints
+  save_every: 10
+
+# =============================================================================
+# Inference Configuration
+# =============================================================================
+inference:
+  output_dir: Results/output     # where to save inference results
+  input_dir: Results/input       # where to read images for batch inference
+  texture_preservation: true
+  default_device: auto
+  auto_checkpoint: true          # automatically find best checkpoint
