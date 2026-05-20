@@ -19,25 +19,25 @@ masking:
   # Model backbone: resnet18 or resnet34
   model_name: resnet34
 
-  # Which parts to include in the mask (face, neck, mouth, etc.)
+  # Which parts to include in the correction mask.
   # Set to true to include, false to exclude
-  # ONLY face (skin) + ears + neck - no background, no clothes, no small features
+  # Use one face+neck piece for shadow removal. Keep background, hair, and clothes out.
   include:
     skin: true       # face/skin
-    l_brow: false    # left eyebrow - excluded
-    r_brow: false    # right eyebrow - excluded
-    l_eye: false     # left eye - excluded
-    r_eye: false     # right eye - excluded
+    l_brow: true     # left eyebrow
+    r_brow: true     # right eyebrow
+    l_eye: true      # left eye
+    r_eye: true      # right eye
     eye_g: false     # eye glasses - excluded
-    l_ear: true      # left ear - INCLUDED
-    r_ear: true      # right ear - INCLUDED
+    l_ear: true      # left ear
+    r_ear: true      # right ear
     ear_r: false     # earring - excluded
-    nose: false      # nose - excluded
-    mouth: false     # mouth - excluded
-    u_lip: false     # upper lip - excluded
-    l_lip: false     # lower lip - excluded
-    neck: true       # neck - INCLUDED
-    neck_l: true     # neck label - INCLUDED
+    nose: true       # nose
+    mouth: true      # mouth
+    u_lip: true      # upper lip
+    l_lip: true      # lower lip
+    neck: true       # neck
+    neck_l: true     # neck label
     cloth: false     # clothes - EXCLUDED
     hair: false      # hair - EXCLUDED
     hat: false       # hat - EXCLUDED

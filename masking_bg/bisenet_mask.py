@@ -26,6 +26,7 @@ BiSeNet = bisenet_module.BiSeNet
 
 import torch
 import numpy as np
+import cv2
 from PIL import Image
 import torchvision.transforms as transforms
 
@@ -142,6 +143,31 @@ class BiSeNetMaskGenerator:
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
 
+    @staticmethod
+    def _make_one_piece(mask: np.ndarray) -> np.ndarray:
+        """Close tiny gaps and fill holes so face+neck is one correction surface."""
+        binary = (mask > 0.5).astype(np.uint8)
+        if binary.sum() == 0:
+            return mask.astype(np.float32)
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+        h, w = binary.shape
+        flood = binary.copy()
+        flood_mask = np.zeros((h + 2, w + 2), dtype=np.uint8)
+        cv2.floodFill(flood, flood_mask, (0, 0), 1)
+        holes = (flood == 0).astype(np.uint8)
+        filled = np.maximum(binary, holes)
+
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(filled, connectivity=8)
+        if num_labels <= 1:
+            return filled.astype(np.float32)
+
+        largest_label = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+        largest = (labels == largest_label).astype(np.float32)
+        return largest
+
     def _prepare_image(self, image: Image.Image) -> torch.Tensor:
         resized = image.resize(self.input_size, resample=Image.BILINEAR)
         tensor = self._transform(resized)
@@ -188,8 +214,8 @@ class BiSeNetMaskGenerator:
 
         mask_pil = Image.fromarray((mask * 255).astype(np.uint8))
         mask_resized = np.array(mask_pil.resize((w, h), resample=Image.NEAREST)) / 255.0
-        
-        return mask_resized.astype(np.float32)
+
+        return self._make_one_piece(mask_resized).astype(np.float32)
 
     def get_full_parsing(self, image_rgb: np.ndarray) -> np.ndarray:
         """Get full 19-class parsing map."""
