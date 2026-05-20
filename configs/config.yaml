@@ -21,32 +21,34 @@ masking:
 
   # Which parts to include in the mask (face, neck, mouth, etc.)
   # Set to true to include, false to exclude
+  # ONLY face (skin) + ears + neck - no background, no clothes, no small features
   include:
-    skin: true       # visage/face
-    l_brow: true     # left eyebrow
-    r_brow: true     # right eyebrow
-    l_eye: true     # left eye
-    r_eye: true     # right eye
-    eye_glasses: false
-    l_ear: false     # left ear
-    r_ear: false     # right ear
-    earring: false
-    nose: true       # nose
-    mouth: true      # mouth
-    u_lip: true     # upper lip
-    l_lip: true     # lower lip
-    neck: true       # neck
-    neck_l: true     # neck label
-    cloth: false     # clothes - usually exclude for face shadow removal
-    hair: false      # hair - usually exclude
-    hat: false       # hat - usually exclude
+    skin: true       # face/skin
+    l_brow: false    # left eyebrow - excluded
+    r_brow: false    # right eyebrow - excluded
+    l_eye: false     # left eye - excluded
+    r_eye: false     # right eye - excluded
+    eye_g: false     # eye glasses - excluded
+    l_ear: true      # left ear - INCLUDED
+    r_ear: true      # right ear - INCLUDED
+    ear_r: false     # earring - excluded
+    nose: false      # nose - excluded
+    mouth: false     # mouth - excluded
+    u_lip: false     # upper lip - excluded
+    l_lip: false     # lower lip - excluded
+    neck: true       # neck - INCLUDED
+    neck_l: true     # neck label - INCLUDED
+    cloth: false     # clothes - EXCLUDED
+    hair: false      # hair - EXCLUDED
+    hat: false       # hat - EXCLUDED
 
 # =============================================================================
 # Training Configuration
 # =============================================================================
 training:
-  batch_size: 4
-  epochs: 200
+  batch_size: 10
+  num_workers: 4
+  epochs: 100
   lr: 0.00001
   enc_lr: 0.000001
   no_amp: true

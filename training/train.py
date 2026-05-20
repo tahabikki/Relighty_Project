@@ -282,12 +282,10 @@ def train():
                 for p in model.parameters() if p.grad is not None
             )
             if has_nan_inf:
-                scaler.update()
                 gn = float('nan')
             else:
                 gn = torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0).item()
                 scaler.step(optimizer)
-                scaler.update()
             scaler.update()
 
             bl = loss.item()

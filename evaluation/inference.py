@@ -2,17 +2,12 @@
 """
 Shadow removal inference using BiSeNet face parsing.
 
-Output options:
-- PNG with transparent background (default)
-- Composite with original background (--keep-bg)
+Output:
+- Original image with only the configured face/neck mask corrected.
 
 Usage
 ────
-    # PNG with transparent background (default)
     python -m evaluation.inference --input photo.jpg --output result.png
-
-    # Keep original background
-    python -m evaluation.inference --input photo.jpg --output result.jpg --keep-bg
 """
 import sys
 from pathlib import Path
@@ -27,6 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from utils.config_loader import get_config, get_checkpoint_path, get_inference_output_path
 from models.shadow_remover import ShadowRemovalNet
 from masking_bg.bisenet_mask import BiSeNetMaskGenerator
+from postprocessing.fix_light import fix_light
 
 config = get_config()
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
@@ -63,23 +59,21 @@ def _apply_texture_preservation(original, prediction, mask, dynamic_strength=0.6
     corrected_bgr = cv2.cvtColor(corrected_lab.astype(np.uint8), cv2.COLOR_LAB2BGR).astype(np.float32)
     corrected_textured = corrected_bgr + texture_hf
 
-    alpha = (cv2.GaussianBlur(mask, (15, 15), 0) * dynamic_strength)[..., None]
+    hard_mask = (mask > 0.5).astype(np.float32)
+    alpha = (cv2.GaussianBlur(mask, (15, 15), 0) * hard_mask * dynamic_strength)[..., None]
     blended = image_f * (1.0 - alpha) + corrected_textured * alpha
 
     return np.clip(blended, 0, 255).astype(np.uint8)
 
 
 @torch.no_grad()
-def remove_shadow(model, mask_gen, img_bgr, device, img_size=256, keep_bg=False):
+def remove_shadow(model, mask_gen, img_bgr, device, img_size=256):
     """
     Remove facial shadows using BiSeNet face parsing.
-    
-    Args:
-        keep_bg: If True, keep original background; if False, output transparent BG
+    Keeps original background, applies model only on face+neck+ear.
     
     Returns:
-        If keep_bg=False: BGRA image (PNG with transparency)
-        If keep_bg=True: BGR image with original background
+        BGR image with original background preserved
     """
     orig_h, orig_w = img_bgr.shape[:2]
     orig_bgr = img_bgr.copy()
@@ -87,7 +81,7 @@ def remove_shadow(model, mask_gen, img_bgr, device, img_size=256, keep_bg=False)
     resized = cv2.resize(img_bgr, (img_size, img_size))
 
     rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-    combined_mask = mask_gen.generate_mask(rgb, include_face=True, include_neck=True, include_mouth=True)
+    face_mask = mask_gen.generate_mask(rgb)
 
     tensor = (torch.from_numpy(rgb.astype(np.float32) / 255.0).permute(2, 0, 1).unsqueeze(0).to(device))
     pred = model(tensor)
@@ -95,41 +89,30 @@ def remove_shadow(model, mask_gen, img_bgr, device, img_size=256, keep_bg=False)
     pred_bgr = cv2.cvtColor(pred_rgb, cv2.COLOR_RGB2BGR)
 
     gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-    mask_bool = combined_mask > 0.5
+    mask_bool = face_mask > 0.5
     std_dev = float(np.std(gray[mask_bool])) if np.any(mask_bool) else 50.0
     mean_diff = float(np.abs(pred_bgr.astype(np.float32) - resized.astype(np.float32))[mask_bool].mean()) if np.any(mask_bool) else 0.0
 
     if mean_diff < (std_dev * 0.15):
-        result_img = resized
+        result_resized = resized
     else:
         dynamic_strength = float(np.clip(0.30 + (mean_diff / 100.0), 0.35, 0.60))
-        result_img = _apply_texture_preservation(resized, pred_bgr, combined_mask, dynamic_strength)
+        result_resized = _apply_texture_preservation(resized, pred_bgr, face_mask, dynamic_strength)
+
+    result_resized = cv2.GaussianBlur(result_resized, (3, 3), 0)
 
     if (orig_h, orig_w) != (img_size, img_size):
-        result_img = cv2.resize(result_img, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
-        combined_mask = cv2.resize(combined_mask, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+        result_resized = cv2.resize(result_resized, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
+        face_mask = cv2.resize(face_mask, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
-    result_img = cv2.GaussianBlur(result_img, (3, 3), 0)
+    face_mask_hard = (face_mask > 0.5).astype(np.float32)
+    face_mask_smooth = cv2.GaussianBlur(face_mask.astype(np.float32), (21, 21), 0) * face_mask_hard
 
-    if keep_bg:
-        # Create binary mask - 1 where we want prediction, 0 where we want original
-        face_mask = (combined_mask > 0.5).astype(np.float32)
-        
-        # Only blend at edges with slight blur, center is pure prediction or pure original
-        smooth_mask = cv2.GaussianBlur(face_mask, (15, 15), 0)
-        
-        # Exact original background, prediction only on face/neck region
-        result_f = result_img.astype(np.float32)
-        orig_f = orig_bgr.astype(np.float32)
-        
-        # Where mask=0 (background): use original
-        # Where mask=1 (face/neck): use prediction  
-        final = orig_f * (1 - smooth_mask[:, :, np.newaxis]) + result_f * smooth_mask[:, :, np.newaxis]
-        return np.clip(final, 0, 255).astype(np.uint8)
-    else:
-        b, g, r = cv2.split(result_img)
-        alpha = (cv2.GaussianBlur(combined_mask, (21, 21), 0) * 255).astype(np.uint8)
-        return cv2.merge([b, g, r, alpha])
+    result_f = result_resized.astype(np.float32)
+    orig_f = orig_bgr.astype(np.float32)
+
+    final = orig_f * (1 - face_mask_smooth[:, :, np.newaxis]) + result_f * face_mask_smooth[:, :, np.newaxis]
+    return np.clip(final, 0, 255).astype(np.uint8)
 
 
 def main():
@@ -140,7 +123,6 @@ def main():
     p.add_argument("--checkpoint", default=None)
     p.add_argument("--device", default="auto")
     p.add_argument("--img_size", type=int, default=None)
-    p.add_argument("--keep-bg", action="store_true", help="Keep original background instead of transparent")
     args = p.parse_args()
 
     data_cfg = config.get("data") or {}
@@ -158,7 +140,8 @@ def main():
 
     print(f"Checkpoint: {ckpt_path}")
     print(f"Device: {device}")
-    print(f"Keep background: {args.keep_bg}")
+    print("Background: original preserved")
+    print("Engine: postprocessing.fix_light")
 
     model = load_model(str(ckpt_path), device)
     mask_gen = BiSeNetMaskGenerator.from_config(config)
@@ -174,10 +157,10 @@ def main():
             print(f"ERROR: Cannot read {inp_path}")
             sys.exit(1)
         
-        result = remove_shadow(model, mask_gen, img, device, args.img_size, args.keep_bg)
+        result = fix_light(img, model_bundle=(model, device), mask_gen=mask_gen)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         
-        if not args.keep_bg and out_path.suffix.lower() != '.png':
+        if out_path.suffix.lower() not in ['.jpg', '.jpeg', '.png', '.bmp']:
             out_path = out_path.with_suffix('.png')
         
         cv2.imwrite(str(out_path), result, [cv2.IMWRITE_PNG_COMPRESSION, 0] if out_path.suffix.lower() == '.png' else [])
@@ -199,8 +182,8 @@ def main():
                 print(f"  [{i:>4}/{len(files)}]  SKIP: {f.name}")
                 continue
             
-            result = remove_shadow(model, mask_gen, img, device, args.img_size, args.keep_bg)
-            ext = ".png" if not args.keep_bg else f.suffix
+            result = fix_light(img, model_bundle=(model, device), mask_gen=mask_gen)
+            ext = f.suffix if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp'] else '.png'
             out_file = out_dir / f"{f.stem}{ext}"
             cv2.imwrite(str(out_file), result, [cv2.IMWRITE_PNG_COMPRESSION, 0] if ext == ".png" else [])
             print(f"  [{i:>4}/{len(files)}]  {f.name}  ->  {out_file.name}")

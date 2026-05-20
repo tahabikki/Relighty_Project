@@ -451,7 +451,7 @@ def _build_neck_mask_smart(face_pts: np.ndarray, h: int, w: int) -> np.ndarray:
     neck_mask = np.clip(neck_mask, 0.0, 1.0)
 
 
-def fix_light(image):
+def fix_light(image, model_bundle=None, mask_gen=None):
     """
     Face shadow removal with neck extension.
     - Face zone  : full model prediction + texture preservation
@@ -459,7 +459,7 @@ def fix_light(image):
                    artifacts from the model never being trained on neck pixels
     - Gradient mask ensures smooth chin→neck transition
     """
-    model, device = load_shadow_model()
+    model, device = model_bundle if model_bundle is not None else load_shadow_model()
     orig_h, orig_w = image.shape[:2]
 
     # 1. Basse résolution pour l'inférence
@@ -467,15 +467,10 @@ def fix_light(image):
     rgb_lr = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
 
     # 2. Détection visage + cou avec BiSeNet
-    mask_gen = get_face_mask_gen()
-    face_mask_lr = mask_gen.generate_mask(rgb_lr, include_face=True, include_neck=True, include_mouth=True)
-
-    # Translation vers le haut pour couvrir le front
-    shift_y = -20
-    M = np.float32([[1, 0, 0], [0, 1, shift_y]])
-    shifted_mask = cv2.warpAffine(face_mask_lr, M, (SHADOW_INPUT_SIZE, SHADOW_INPUT_SIZE))
-    face_mask_lr = cv2.max(face_mask_lr, shifted_mask)
-    face_mask_lr = cv2.GaussianBlur(face_mask_lr, (31, 31), 0)
+    mask_gen = mask_gen if mask_gen is not None else get_face_mask_gen()
+    face_mask_lr = mask_gen.generate_mask(rgb_lr)
+    face_mask_hard_lr = (face_mask_lr > 0.5).astype(np.float32)
+    face_mask_lr = cv2.GaussianBlur(face_mask_lr, (31, 31), 0) * face_mask_hard_lr
     face_mask_lr = np.clip(face_mask_lr, 0.0, 1.0)
     mask_bool_lr = face_mask_lr > 0.5
 
@@ -536,7 +531,8 @@ def fix_light(image):
     corrected_textured = corrected_bgr + texture_hf
 
     # 8. Face blend - removes shadows, keeps original texture
-    alpha_face = (cv2.GaussianBlur(face_mask_hr, (15, 15), 0) * dynamic_strength)[..., None]
+    hard_face_mask_hr = (face_mask_hr > 0.5).astype(np.float32)
+    alpha_face = (cv2.GaussianBlur(face_mask_hr, (15, 15), 0) * hard_face_mask_hr * dynamic_strength)[..., None]
     blended    = image_f * (1.0 - alpha_face) + corrected_textured * alpha_face
 
     # 9. Neck blend - same L-channel approach (preserves original texture)
@@ -544,7 +540,8 @@ def fix_light(image):
         if neck_mask_hr.shape[:2] != (orig_h, orig_w):
             neck_mask_hr = cv2.resize(neck_mask_hr, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
         
-        alpha_neck = (cv2.GaussianBlur(neck_mask_hr, (21, 21), 0) * dynamic_strength)[..., None]
+        hard_neck_mask_hr = (neck_mask_hr > 0.5).astype(np.float32)
+        alpha_neck = (cv2.GaussianBlur(neck_mask_hr, (21, 21), 0) * hard_neck_mask_hr * dynamic_strength)[..., None]
         blended = blended * (1.0 - alpha_neck) + corrected_textured * alpha_neck
 
     return np.clip(blended, 0, 255).astype(np.uint8)

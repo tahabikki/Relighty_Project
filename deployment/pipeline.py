@@ -107,8 +107,9 @@ class ShadowRemovalPipeline:
             result_img = cv2.resize(result_img, (orig_w, orig_h), interpolation=cv2.INTER_LANCZOS4)
             combined_mask = cv2.resize(combined_mask, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
 
+        hard_mask = (combined_mask > 0.5).astype(np.float32)
         b, g, r = cv2.split(result_img)
-        alpha = (cv2.GaussianBlur(combined_mask, (21, 21), 0) * 255).astype(np.uint8)
+        alpha = (cv2.GaussianBlur(combined_mask, (21, 21), 0) * hard_mask * 255).astype(np.uint8)
         return cv2.merge([b, g, r, alpha])
 
     def _blend_with_texture(self, original, prediction, mask, strength):
@@ -126,7 +127,8 @@ class ShadowRemovalPipeline:
         corrected_bgr = cv2.cvtColor(corrected_lab.astype(np.uint8), cv2.COLOR_LAB2BGR).astype(np.float32)
         corrected = corrected_bgr + texture_hf
 
-        alpha = (cv2.GaussianBlur(mask, (15, 15), 0) * strength)[..., None]
+        hard_mask = (mask > 0.5).astype(np.float32)
+        alpha = (cv2.GaussianBlur(mask, (15, 15), 0) * hard_mask * strength)[..., None]
         return (image_f * (1.0 - alpha) + corrected * alpha).clip(0, 255).astype(np.uint8)
 
     def process_folder(self, input_dir: Union[str, Path], output_dir: Union[str, Path]) -> int:

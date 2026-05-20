@@ -31,10 +31,25 @@ import torchvision.transforms as transforms
 
 
 ATTRIBUTES = {
-    'skin': 0, 'l_brow': 1, 'r_brow': 2, 'l_eye': 3, 'r_eye': 4,
-    'eye_g': 5, 'l_ear': 6, 'r_ear': 7, 'ear_r': 8, 'nose': 9,
-    'mouth': 10, 'u_lip': 11, 'l_lip': 12, 'neck': 13, 'neck_l': 14,
-    'cloth': 15, 'hair': 16, 'hat': 17,
+    'background': 0,
+    'skin': 1,
+    'l_brow': 2,
+    'r_brow': 3,
+    'l_eye': 4,
+    'r_eye': 5,
+    'eye_g': 6,
+    'l_ear': 7,
+    'r_ear': 8,
+    'ear_r': 9,
+    'nose': 10,
+    'mouth': 11,
+    'u_lip': 12,
+    'l_lip': 13,
+    'neck': 14,
+    'neck_l': 15,
+    'cloth': 16,
+    'hair': 17,
+    'hat': 18,
 }
 
 DEFAULT_INCLUDE = {
